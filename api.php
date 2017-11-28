@@ -7,7 +7,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Pool;
 
 Class api
-        {
+{
 	//	Session/login variables
 	private $api_key = null;
     //	Default Guzzle client & base URIs
@@ -56,7 +56,7 @@ Class api
     		if (isset($content->errors)) {
     			return (object)["errors" => $content->errors];
     		} else {
-    			return $content->data;
+    			return $content;
     		}
     	} else {
     		return false;
@@ -74,15 +74,17 @@ Class api
 	 */
 	public function get_matches($filters = false)
 	{
-		if (!$filters) {
-			return $this->get_json($this->base_url.'matches');
-		} else {
-			$filter_query_string = '';
+		if ($filters != false) {
+			$filter_query_string = '?';
 			foreach ($filters as $filter_name => $filter_value) {
-				$filter_query_string .= 'filter['.$filter_name.']='.$filter_value;
+				$filter_query_string .= 'filter['.$filter_name.']='.$filter_value.'&';
 			}
-			return $this->get_json($this->base_url.'matches?'.$filter_query_string);
+		}else{
+			$filter_query_string = '';
 		}
+
+		$matches_data = $this->get_json($this->base_url.'matches'.$filter_query_string);
+		return $this->format_match_data($matches_data);
 	}
 
 	/**
@@ -94,6 +96,11 @@ Class api
 	{
 		$matches = $this->get_matches($filters);
 		foreach ($matches as &$match) {
+			//	Gather the round IDs
+			$match_rounds = [];
+			foreach ($match->relationships->rounds->data as $round) {
+				$match_rounds[] = $round->id;
+			}
 			if (isset($match->relationships->assets->data[0])) {
 				$match->telemetry = $this->get_telemetry($match->relationships->assets->data[0]->id);
 			}
@@ -112,13 +119,85 @@ Class api
 	}
 
 	/**
-	 * Get the telemetry data for a given id
+	 * Format/link the data returned by the matches endpoint
+	 * @param array of objects  
+	 * @return array of objects
+	 */
+	private function format_match_data($matches)
+	{
+		//	Start by categorizing the different included structures by their type for easier handling later on
+		$rounds = [];
+		$rosters = [];
+		$participants = [];
+		$players = [];
+		$assets = [];
+		foreach ($matches->included as $data_structure) {
+			switch ($data_structure->type) {
+				case 'round':
+					$rounds[$data_structure->id] = $data_structure;
+					break;
+				case 'roster':
+					$rosters[$data_structure->id] = $data_structure;
+					break;
+				case 'participant':
+					$participants[$data_structure->id] = $data_structure;
+					break;
+				case 'player':
+					$players[$data_structure->id] = $data_structure;
+					break;
+				case 'asset':
+					$assets[$data_structure->id] = $data_structure;
+					break;
+			}
+		}
+
+		//	Loop over all the participants and match their player ID to them
+		foreach ($participants as &$participant) {
+			foreach ($players as $player_id => $player) {
+				if ($participant->relationships->player->data->id == $player_id) {		
+					$participant->player_id = $player_id;
+				}
+			}
+			unset($participant->relationships);
+		}
+
+		//	Loop over all rosters and merge the participants into them
+		foreach ($rosters as &$roster) {
+			foreach ($roster->relationships->participants->data as $participant) {
+				$roster->participants[] = $participants[$participant->id];
+			}
+			unset($roster->relationships);
+		}
+
+		//loop over all the matches and merge the rounds and rosters into them
+		foreach ($matches->data as &$match) {
+
+			foreach ($match->relationships->rounds->data as $round) {
+				$match->rounds[] = $rounds[$round->id];
+			}
+
+			foreach ($match->relationships->rosters->data as $roster) {
+				$match->rosters = $rosters[$roster->id];
+			}
+
+			foreach ($match->relationships->assets->data as $asset) {
+				$match->telemetry = $this->get_telemetry($assets[$asset->id]->attributes->URL);
+			}
+
+			unset($match->relationships);
+		}
+
+		return $matches->data;
+	}
+
+	/**
+	 * Get the telemetry data for a given url
 	 * @param integer $telemetry_id
 	 * @return object
 	 */
-	public function get_telemetry($telemetry_id)
+	public function get_telemetry($telemetry_url)
 	{
-		return $this->get_json($this->telemetry_url.$telemetry_id.'-telemetry.json');
+		return $this->get_json($telemetry_url);
 	}
 
 	/*

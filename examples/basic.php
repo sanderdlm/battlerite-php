@@ -4,6 +4,7 @@
  */
 
 require_once '../api.php';
-$b = new \Battlerite\api('your-api-key-goes-here');
+$b = new \Battlerite\api('your-api-key-here');
 $matches = $b->get_matches();
-print_r($matches);
+echo '<pre>';
+print_r($matches[0]);
