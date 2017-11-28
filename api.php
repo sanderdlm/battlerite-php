@@ -1,12 +1,4 @@
 <?php
-/*
--------------- Ralph  ---------------
-An interface for Runescape web data
-
-    Copyright (c) 2017 @dreadnip
-            License: MIT
-https://github.com/dreadnip/ralph
-*/
 
 namespace Battlerite;
 
