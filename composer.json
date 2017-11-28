@@ -1,0 +1,20 @@
+{
+    "name": "dreadnip/battlerite-php",
+    "description": "PHP wrapper for Battlerite API using Guzzle for fast, concurrent requests",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["battlerite", "stats", "data", "PHP", "Guzzle", "API"],
+    "authors": [
+        {
+            "name": "Dreadnip",
+            "email": "inbox@sanderdlm.be"
+        }
+    ],
+    "support": {
+        "source": "https://github.com/dreadnip/battlerite-php"
+    },
+    "require": {
+        "php": ">=5.6.0",
+        "guzzlehttp/guzzle": "6.*"
+    }
+}
