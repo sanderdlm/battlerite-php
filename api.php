@@ -129,7 +129,6 @@ Class api
 		$rounds = [];
 		$rosters = [];
 		$participants = [];
-		$players = [];
 		$assets = [];
 		foreach ($matches->included as $data_structure) {
 			switch ($data_structure->type) {
@@ -142,23 +141,10 @@ Class api
 				case 'participant':
 					$participants[$data_structure->id] = $data_structure;
 					break;
-				case 'player':
-					$players[$data_structure->id] = $data_structure;
-					break;
 				case 'asset':
 					$assets[$data_structure->id] = $data_structure;
 					break;
 			}
-		}
-
-		//	Loop over all the participants and match their player ID to them
-		foreach ($participants as &$participant) {
-			foreach ($players as $player_id => $player) {
-				if ($participant->relationships->player->data->id == $player_id) {		
-					$participant->player_id = $player_id;
-				}
-			}
-			unset($participant->relationships);
 		}
 
 		//	Loop over all rosters and merge the participants into them
@@ -177,7 +163,7 @@ Class api
 			}
 
 			foreach ($match->relationships->rosters->data as $roster) {
-				$match->rosters = $rosters[$roster->id];
+				$match->rosters[] = $rosters[$roster->id];
 			}
 
 			foreach ($match->relationships->assets->data as $asset) {
