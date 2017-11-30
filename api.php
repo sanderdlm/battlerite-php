@@ -50,14 +50,12 @@ Class api
 			//get the response content
     		$body = $response->getBody()->getContents();
 		    //decode the content
-    		$content = json_decode($body);
+    		return json_decode($body);
 
-		    //if there are errors, return them as a properties of an object
-    		if (isset($content->errors)) {
-    			return (object)["errors" => $content->errors];
-    		} else {
-    			return $content;
-    		}
+    	} else if ($response->getStatusCode() == 401) {
+    		return ["error" => "Unauthorized request."];
+    	} else if ($response->getStatusCode() == 400) {
+    		return ["error" => "Malformed request."];
     	} else {
     		return false;
     	}
@@ -69,7 +67,7 @@ Class api
 
 	/**
 	 * Get a collection of matches
-	 * @param array $filters - See http://battlerite-docs.readthedocs.io/en/latest/matches/matches.html#get-a-collection-of-matches for the possible filters
+	 * @param array $options - See http://battlerite-docs.readthedocs.io/en/latest/matches/matches.html#get-a-collection-of-matches for the possible filters
 	 * @return array of objects
 	 */
 	public function get_matches($options = false)
@@ -79,15 +77,17 @@ Class api
 			try {
 				$query_string = $this->generate_query_string($options);
 			} catch (\Exception $e) {
-				return $e->getMessage();
+				return ["error" => $e->getMessage()];
 			}
 		}
 		$matches_data = $this->get_json($this->base_url.'matches'.$query_string);
 
-		if ($matches_data != false) {
-			return $this->format_match_data($matches_data);
+		if (isset($matches_data['error'])) {
+			return $matches_data;
+		} else if ($matches_data != false) {
+			return $this->format_match_data($matches_data, true);
 		} else {
-			return 'No matches found.';
+			return ["error" => "No matches found."];
 		}
 	}
 
@@ -98,18 +98,23 @@ Class api
 	 */
 	public function get_full_matches($filters = false)
 	{
-		$matches = $this->get_matches($filters);
-		foreach ($matches as &$match) {
-			//	Gather the round IDs
-			$match_rounds = [];
-			foreach ($match->relationships->rounds->data as $round) {
-				$match_rounds[] = $round->id;
-			}
-			if (isset($match->relationships->assets->data[0])) {
-				$match->telemetry = $this->get_telemetry($match->relationships->assets->data[0]->id);
+		$query_string = '';
+		if ($options != false) {
+			try {
+				$query_string = $this->generate_query_string($options);
+			} catch (\Exception $e) {
+				return ["error" => $e->getMessage()];
 			}
 		}
-		return $matches;
+		$matches_data = $this->get_json($this->base_url.'matches'.$query_string);
+
+		if (isset($matches_data['error'])) {
+			return $matches_data;
+		} else if ($matches_data != false) {
+			return $this->format_match_data($matches_data, true);
+		} else {
+			return ["error" => "No matches found."];
+		}
 	}
 
 	/**
@@ -127,7 +132,7 @@ Class api
 	 * @param array of objects  
 	 * @return array of objects
 	 */
-	private function format_match_data($matches)
+	private function format_match_data($matches, $telemetry = false)
 	{
 		//	Start by categorizing the different included structures by their type for easier handling later on
 		$rounds = [];
@@ -170,8 +175,10 @@ Class api
 				$match->rosters[] = $rosters[$roster->id];
 			}
 
-			foreach ($match->relationships->assets->data as $asset) {
-				$match->telemetry = $this->get_telemetry($assets[$asset->id]->attributes->URL);
+			if ($telemetry == true) {
+				foreach ($match->relationships->assets->data as $asset) {
+					$match->telemetry = $this->get_telemetry($assets[$asset->id]->attributes->URL);
+				}
 			}
 
 			unset($match->relationships);
