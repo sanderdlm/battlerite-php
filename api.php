@@ -53,9 +53,9 @@ Class api
     		return json_decode($body);
 
     	} else if ($response->getStatusCode() == 401) {
-    		return ["error" => "Unauthorized request."];
+    		return (object)["error" => "Unauthorized request."];
     	} else if ($response->getStatusCode() == 400) {
-    		return ["error" => "Malformed request."];
+    		return (object)["error" => "Malformed request."];
     	} else {
     		return false;
     	}
@@ -82,36 +82,10 @@ Class api
 		}
 		$matches_data = $this->get_json($this->base_url.'matches'.$query_string);
 
-		if (isset($matches_data['error'])) {
+		if (isset($matches_data->error)) {
 			return $matches_data;
 		} else if ($matches_data != false) {
-			return $this->format_match_data($matches_data, true);
-		} else {
-			return ["error" => "No matches found."];
-		}
-	}
-
-	/**
-	 * Get a collection of matches + their telemetry data
-	 * @param array $filters - See http://battlerite-docs.readthedocs.io/en/latest/matches/matches.html#get-a-collection-of-matches for the possible filters
-	 * @return array of objects
-	 */
-	public function get_full_matches($filters = false)
-	{
-		$query_string = '';
-		if ($options != false) {
-			try {
-				$query_string = $this->generate_query_string($options);
-			} catch (\Exception $e) {
-				return ["error" => $e->getMessage()];
-			}
-		}
-		$matches_data = $this->get_json($this->base_url.'matches'.$query_string);
-
-		if (isset($matches_data['error'])) {
-			return $matches_data;
-		} else if ($matches_data != false) {
-			return $this->format_match_data($matches_data, true);
+			return $this->format_matches($matches_data);
 		} else {
 			return ["error" => "No matches found."];
 		}
@@ -128,63 +102,105 @@ Class api
 	}
 
 	/**
+	 * Take a list of included match assets and generate an ID indexed list from them
+	 * @param array of objects  
+	 * @return ID indexed array of objects
+	 */
+	private function index_assets($assets)
+	{
+		$indexed_list = [];
+		foreach ($assets as $asset) {
+			$indexed_list[$asset->id] = $asset;
+		}
+		return $indexed_list;
+	}
+
+	/**
 	 * Format/link the data returned by the matches endpoint
 	 * @param array of objects  
 	 * @return array of objects
 	 */
-	private function format_match_data($matches, $telemetry = false)
+	private function format_matches($matches)
 	{
-		//	Start by categorizing the different included structures by their type for easier handling later on
-		$rounds = [];
-		$rosters = [];
-		$participants = [];
-		$assets = [];
-		foreach ($matches->included as $data_structure) {
-			switch ($data_structure->type) {
-				case 'round':
-					$rounds[$data_structure->id] = $data_structure;
-					break;
-				case 'roster':
-					$rosters[$data_structure->id] = $data_structure;
-					break;
-				case 'participant':
-					$participants[$data_structure->id] = $data_structure;
-					break;
-				case 'asset':
-					$assets[$data_structure->id] = $data_structure;
-					break;
-			}
+		$new_match_list = [];
+		$assets = $this->index_assets($matches->included);
+		foreach ($matches->data as $match) {
+			$new_match_list[] = $this->format_match($match, $assets);
 		}
+		return $new_match_list;
+	}
 
-		//	Loop over all rosters and merge the participants into them
-		foreach ($rosters as &$roster) {
-			foreach ($roster->relationships->participants->data as $participant) {
-				$roster->participants[] = $participants[$participant->id];
-			}
-			unset($roster->relationships);
-		}
-
-		//loop over all the matches and merge the rounds and rosters into them
-		foreach ($matches->data as &$match) {
-
-			foreach ($match->relationships->rounds->data as $round) {
-				$match->rounds[] = $rounds[$round->id];
-			}
-
-			foreach ($match->relationships->rosters->data as $roster) {
-				$match->rosters[] = $rosters[$roster->id];
-			}
-
-			if ($telemetry == true) {
-				foreach ($match->relationships->assets->data as $asset) {
-					$match->telemetry = $this->get_telemetry($assets[$asset->id]->attributes->URL);
+	/**
+	 * Format/link the data returned by the matches endpoint
+	 * @param array of objects  
+	 * @return array of objects
+	 */
+	private function format_match($match, $assets)
+	{
+		//	Loop over all rosters and merge the 'attributes' & 'stats' arrays upwards into their parent arrays
+		foreach ($assets as &$asset) {
+			if (isset($asset->attributes)) {
+				foreach ($asset->attributes as $attribute_name => $attribute_value) {
+					if ($attribute_name == "stats" && $attribute_value !== null) {
+						foreach ($attribute_value as $stats_name => $stats_value) {
+							$asset->{$stats_name} = $stats_value;
+						}
+					} else {
+						$asset->{$attribute_name} = $attribute_value;
+					}
 				}
+				unset($asset->attributes);
 			}
-
-			unset($match->relationships);
 		}
 
-		return $matches->data;
+		//	Prepare a new clean object to store the match data in
+		$new_match = (object)[];
+		//	Add the basic stuff
+		$new_match->game_type = $match->type;
+		$new_match->id = $match->id;
+		$new_match->link = $match->links->self;
+
+		//	Take the match attributes and place them in the new match object
+		foreach ($match->attributes as $attribute_name => $attribute_value) {
+			if ($attribute_name == "stats") {
+				foreach ($attribute_value as $stats_name => $stats_value) {
+					$new_match->{$stats_name} = $stats_value;
+				}
+			} else {
+				$new_match->{$attribute_name} = $attribute_value;
+			}
+		}
+
+		//	Take the rounds and place them in the new match object
+		foreach ($match->relationships->rounds->data as $round) {
+			$new_match->rounds[] = $assets[$round->id];
+		}
+
+		//	Take the rosters and place them in the new match object
+		foreach ($match->relationships->rosters->data as $roster) {
+			$roster_data = $assets[$roster->id];
+			
+			//	But first move the participants into the roster objects
+			foreach ($roster_data->relationships->participants->data as $roster_participants) {
+				$participant_data = $assets[$roster_participants->id];
+				unset($participant_data->relationships);
+				$roster_data->participants[] = $participant_data;
+			}
+
+			unset($roster_data->relationships);
+			//	Then add it to the new match boject
+			$new_match->rosters[] = $roster_data;
+		}
+
+		//	Add the telemetry URL for later use
+		foreach ($match->relationships->assets->data as $asset) {
+			$new_match->telemetry_url = $assets[$asset->id]->URL;
+		}
+
+		//	CLean up by removing all of the relationship clutter
+		unset($match->relationships);
+
+		return $new_match;
 	}
 
 	/**
