@@ -4,7 +4,6 @@ namespace Battlerite;
 
 require __DIR__.'../vendor/autoload.php';
 use GuzzleHttp\Client;
-use GuzzleHttp\Pool;
 
 Class api
 {
@@ -116,7 +115,7 @@ Class api
 	}
 
 	/**
-	 * Format/link the data returned by the matches endpoint
+	 * Format the data of multiple matches returned by the matches endpoint
 	 * @param array of objects  
 	 * @return array of objects
 	 */
@@ -131,9 +130,9 @@ Class api
 	}
 
 	/**
-	 * Format/link the data returned by the matches endpoint
-	 * @param array of objects  
-	 * @return array of objects
+	 * Format the data of a single match into a single readable object
+	 * @param object $match - a single [data] match object from the API | array $assets - the [included] array from the API passed through the index_assets function
+	 * @return object $match - readable, formatted match data for the passed match
 	 */
 	private function format_match($match, $assets)
 	{
