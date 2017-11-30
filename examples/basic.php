@@ -3,8 +3,11 @@
  *	Basic example
  */
 
-require_once '../api.php';
+require_once './api.php';
 $b = new \Battlerite\api('your-api-key-here');
-$matches = $b->get_matches();
-echo '<pre>';
-echo json_encode($matches[0]);
+$options = [
+	"sort" => "createdAt",
+	"page[limit]" => 1
+];
+$matches = $b->get_matches($options);
+print_r($matches);

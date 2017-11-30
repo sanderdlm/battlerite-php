@@ -72,19 +72,23 @@ Class api
 	 * @param array $filters - See http://battlerite-docs.readthedocs.io/en/latest/matches/matches.html#get-a-collection-of-matches for the possible filters
 	 * @return array of objects
 	 */
-	public function get_matches($filters = false)
+	public function get_matches($options = false)
 	{
-		if ($filters != false) {
-			$filter_query_string = '?';
-			foreach ($filters as $filter_name => $filter_value) {
-				$filter_query_string .= 'filter['.$filter_name.']='.$filter_value.'&';
+		$query_string = '';
+		if ($options != false) {
+			try {
+				$query_string = $this->generate_query_string($options);
+			} catch (\Exception $e) {
+				return $e->getMessage();
 			}
-		}else{
-			$filter_query_string = '';
 		}
+		$matches_data = $this->get_json($this->base_url.'matches'.$query_string);
 
-		$matches_data = $this->get_json($this->base_url.'matches'.$filter_query_string);
-		return $this->format_match_data($matches_data);
+		if ($matches_data != false) {
+			return $this->format_match_data($matches_data);
+		} else {
+			return 'No matches found.';
+		}
 	}
 
 	/**
@@ -174,6 +178,29 @@ Class api
 		}
 
 		return $matches->data;
+	}
+
+	/**
+	 * Generate a URL valid query string based on an array of query parameters
+	 * @param key/value array of options
+	 * @return string
+	 */
+	private function generate_query_string($options)
+	{
+		$possible_filters = ["page[offset]", "page[limit]", "sort", "filter[createdAt-start]", "filter[createdAt-end]", "filter[playerNames]", "filter[playerIds]", "filter[teamNames]", "filter[gameMode]"];
+		$query_string = '?';
+		if (isset($options) && is_array($options)) {
+			foreach ($options as $option_name => $option_value) {
+				if(!in_array($option_name, $possible_filters)){
+					throw new \Exception("Invalid query parameter in options array.");
+				}
+				$query_string .= $option_name.'='.$option_value.'&';
+			}
+			return substr($query_string , 0, -1);
+		} else {
+			throw new \Exception("Query parameters have to passed as an array.");
+		}
+		
 	}
 
 	/**
