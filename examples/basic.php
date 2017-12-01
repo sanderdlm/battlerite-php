@@ -25,6 +25,6 @@ foreach ($matches as &$match) {
 }
 */
 
-//	Pretty print it in your browser or CLI
+//	Pretty print it in your browser or cli
 echo '<pre>';
 print_r($matches);

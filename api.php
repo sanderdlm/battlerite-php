@@ -13,6 +13,7 @@ Class api
 	private $client = null;
 	private $base_url = 'https://api.dc01.gamelockerapp.com/shards/global/';
 	private $telemetry_url = 'https://cdn.gamelockerapp.com/stunlock-studios-battlerite/global/2017/11/22/15/37/';
+	private $status_url = 'https://api.dc01.gamelockerapp.com/status';
 	//	Debug output
     public $request_info = [];
 
@@ -247,5 +248,19 @@ Class api
 	public function get_player($player_id)
 	{
 		return $this->get_json($this->base_url.'players/'.$player_id);
+	}
+
+	/*
+     *  Miscellaneous
+     */
+
+	/**
+	 * Check the API status
+	 * @param /
+	 * @return boolean
+	 */
+	public function get_status()
+	{
+		return $this->get_json($this->status_url);
 	}
 }
